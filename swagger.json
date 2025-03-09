@@ -1,0 +1,533 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Bookmark & Premium API",
+    "description": "API for retrieving user bookmarks and premium status with authentication.",
+    "version": "1.1.0"
+  },
+  "servers": [
+    {
+      "url": "https://restore.shngm.io/v1",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Bookmarks"
+    },
+    {
+      "name": "Premium"
+    },
+    {
+      "name": "Cache"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique request identifier."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The request processing timestamp."
+          }
+        }
+      },
+      "FoundItem": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the found manga."
+          },
+          "mangaId": {
+            "type": "string",
+            "description": "Unique identifier for the manga (may be an integer or UUID)."
+          }
+        }
+      },
+      "FoundBatch": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/FoundItem"
+          }
+        },
+        "description": "Batches of found items keyed by batch_x"
+      },
+      "NotFound": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Number of items that were not found."
+          },
+          "titles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "Title that was not found."
+                }
+              }
+            }
+          }
+        }
+      },
+      "CheckData": {
+        "type": "object",
+        "properties": {
+          "readlist_title": {
+            "type": "string",
+            "example": "Bookmark Web",
+            "description": "Where the bookmarks are retrieved from (web or app)."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of found bookmarks."
+          },
+          "batch_total": {
+            "type": "integer",
+            "description": "Total number of batches."
+          },
+          "found": {
+            "$ref": "#/components/schemas/FoundBatch"
+          },
+          "notFound": {
+            "$ref": "#/components/schemas/NotFound"
+          }
+        }
+      },
+      "CheckResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CheckData"
+          }
+        }
+      },
+      "PremiumData": {
+        "type": "object",
+        "properties": {
+          "isValid": {
+            "type": "boolean",
+            "description": "Indicates if the user's premium status is valid."
+          },
+          "currentDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Current timestamp in RFC 3339."
+          },
+          "expiryDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The expiry date of the user's premium subscription."
+          },
+          "remainingDays": {
+            "type": "string",
+            "example": "100 + 10",
+            "description": "Number of days remaining, sometimes adding an extra offset."
+          }
+        }
+      },
+      "PremiumResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PremiumData"
+          }
+        }
+      },
+      "ImportPremiumBody": {
+        "type": "object",
+        "required": [
+          "expired_date",
+          "purchase_date",
+          "user_id"
+        ],
+        "properties": {
+          "expired_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expiration date of the premium subscription (RFC3339).",
+            "example": "2025-03-20T06:35:00Z"
+          },
+          "purchase_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date/time premium was purchased (RFC3339).",
+            "example": "2025-03-09T06:35:00Z"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "External user ID (UUID), as required by the external API."
+          }
+        }
+      },
+      "ImportPremiumResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Premium import successful"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "description": "The external user ID you passed in."
+              },
+              "status": {
+                "type": "string",
+                "example": "processed"
+              }
+            }
+          }
+        }
+      },
+      "GenericResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/check/web": {
+      "get": {
+        "tags": [
+          "Bookmarks"
+        ],
+        "summary": "Get user bookmarks from Web",
+        "operationId": "getWebBookmarks",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved bookmark data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found (from external API).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (e.g., external API failure).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/check/app": {
+      "get": {
+        "tags": [
+          "Bookmarks"
+        ],
+        "summary": "Get user bookmarks from App",
+        "operationId": "getAppBookmarks",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved bookmark data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found in local DB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/premium/check": {
+      "get": {
+        "tags": [
+          "Premium"
+        ],
+        "summary": "Check user premium status",
+        "operationId": "checkUserPremium",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved premium status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PremiumResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (database).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/premium/import": {
+      "post": {
+        "tags": [
+          "Premium"
+        ],
+        "summary": "Import premium data (like a payment callback)",
+        "operationId": "importPremium",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPremiumBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Premium import successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPremiumResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request (missing required fields or invalid format).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found in local DB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict (already processed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (external API or DB issues).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clear": {
+      "get": {
+        "tags": [
+          "Cache"
+        ],
+        "summary": "Clear cache",
+        "operationId": "clearCache",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cache successfully cleared.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (cache clearing failed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
